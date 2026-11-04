@@ -1,0 +1,164 @@
+name: Release
+
+# Push a tag like v1.2.0 (or run manually) to build, package and publish a GitHub Release.
+#
+# Optional signing + notarization — add these repository secrets to enable it:
+#   MACOS_CERTIFICATE           base64 of a "Developer ID Application" .p12
+#   MACOS_CERTIFICATE_PASSWORD  password of that .p12
+#   APPLE_ID                    Apple ID e-mail used for notarization
+#   APPLE_TEAM_ID               10-character Team ID
+#   APPLE_APP_PASSWORD          app-specific password for that Apple ID
+# Without them the release is ad-hoc signed (users must clear the quarantine flag once).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without the leading v (e.g. 1.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build & publish
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      HAS_CERT: ${{ secrets.MACOS_CERTIFICATE != '' }}
+      HAS_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_PASSWORD != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: v
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${INPUT_VERSION#v}"
+          fi
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9A-Za-z.-]+)?$ ]] || { echo "Bad version: $VERSION"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          [[ "$VERSION" == *-* ]] && echo "prerelease=true" >> "$GITHUB_OUTPUT" || echo "prerelease=false" >> "$GITHUB_OUTPUT"
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Import Developer ID certificate
+        if: env.HAS_CERT == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | awk -F'"' '/Developer ID Application/ {print $2; exit}')"
+          [[ -n "$IDENTITY" ]] || { echo "No 'Developer ID Application' identity in the certificate"; exit 1; }
+          echo "WALLPAP_SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Fall back to ad-hoc signing
+        if: env.HAS_CERT != 'true'
+        run: echo "WALLPAP_SIGN_IDENTITY=-" >> "$GITHUB_ENV"
+
+      - name: Build app
+        env:
+          WALLPAP_VERSION: ${{ steps.v.outputs.version }}
+          WALLPAP_BUILD: ${{ github.run_number }}
+        run: |
+          ./build.sh --no-install
+          codesign --verify --deep --strict --verbose=2 build/Wallpap.app
+
+      - name: Notarize & staple app
+        if: env.HAS_CERT == 'true' && env.HAS_NOTARY == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          ditto -c -k --keepParent build/Wallpap.app "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple build/Wallpap.app
+
+      - name: Package DMG & ZIP
+        run: scripts/package.sh "${{ steps.v.outputs.version }}"
+
+      - name: Notarize & staple DMG
+        if: env.HAS_CERT == 'true' && env.HAS_NOTARY == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          xcrun notarytool submit dist/Wallpap.dmg \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple dist/Wallpap.dmg
+          (cd dist && shasum -a 256 Wallpap.dmg Wallpap.zip > SHA256SUMS.txt)
+
+      - name: Write release notes
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          NOTARIZED: ${{ env.HAS_CERT == 'true' && env.HAS_NOTARY == 'true' }}
+        run: |
+          {
+            echo "## Wallpap $VERSION"
+            echo
+            echo "**Требования:** macOS 26 Tahoe, Mac на Apple Silicon (M1 и новее)."
+            echo
+            echo "### Установка"
+            echo "1. Скачайте **Wallpap.dmg** ниже, откройте его и перетащите Wallpap в «Программы»."
+            if [[ "$NOTARIZED" == "true" ]]; then
+              echo "2. Запустите Wallpap из Launchpad или «Программ». Сборка подписана и нотаризована Apple."
+            else
+              echo "2. Сборка не нотаризована Apple, поэтому при первом запуске macOS её заблокирует. Выполните в Терминале:"
+              echo '   ```bash'
+              echo '   xattr -dr com.apple.quarantine /Applications/Wallpap.app'
+              echo '   ```'
+              echo "   или откройте «Системные настройки → Конфиденциальность и безопасность» и нажмите «Всё равно открыть»."
+            fi
+            echo
+            echo "Контрольные суммы — в \`SHA256SUMS.txt\`."
+            echo
+          } > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.tag }}
+          VERSION: ${{ steps.v.outputs.version }}
+          PRERELEASE: ${{ steps.v.outputs.prerelease }}
+        run: |
+          FLAGS=(--title "Wallpap $VERSION" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes --target "$GITHUB_SHA")
+          [[ "$PRERELEASE" == "true" ]] && FLAGS+=(--prerelease)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/Wallpap.dmg dist/Wallpap.zip dist/SHA256SUMS.txt --clobber
+          else
+            gh release create "$TAG" dist/Wallpap.dmg dist/Wallpap.zip dist/SHA256SUMS.txt "${FLAGS[@]}"
+          fi
+
+      - name: Clean up keychain
+        if: always() && env.HAS_CERT == 'true'
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
