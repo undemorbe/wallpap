@@ -18,6 +18,29 @@ struct PlaybackSettings: Codable, Equatable {
     var pauseInLowPowerMode = true
     var playbackSpeed = 1.0
     var scaling: Scaling = .fill
+    /// How long the lock screen stays lit while the video plays: 0 = system default, -1 = until unlocked.
+    var lockScreenAwakeMinutes = 5
+
+    static let lockScreenAwakeChoices: [(minutes: Int, title: String)] = [
+        (0, "Как в системе"), (1, "1 минуту"), (5, "5 минут"), (15, "15 минут"), (30, "30 минут"),
+        (-1, "Пока не разблокирую"),
+    ]
+
+    init() {}
+
+    /// Tolerates missing keys, so adding a setting never resets the user's other settings.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = PlaybackSettings()
+        animateOnDesktop = try c.decodeIfPresent(Bool.self, forKey: .animateOnDesktop) ?? d.animateOnDesktop
+        animateOnLockScreen = try c.decodeIfPresent(Bool.self, forKey: .animateOnLockScreen) ?? d.animateOnLockScreen
+        pauseWhenHidden = try c.decodeIfPresent(Bool.self, forKey: .pauseWhenHidden) ?? d.pauseWhenHidden
+        pauseOnBattery = try c.decodeIfPresent(Bool.self, forKey: .pauseOnBattery) ?? d.pauseOnBattery
+        pauseInLowPowerMode = try c.decodeIfPresent(Bool.self, forKey: .pauseInLowPowerMode) ?? d.pauseInLowPowerMode
+        playbackSpeed = try c.decodeIfPresent(Double.self, forKey: .playbackSpeed) ?? d.playbackSpeed
+        scaling = (try? c.decodeIfPresent(Scaling.self, forKey: .scaling)) ?? d.scaling
+        lockScreenAwakeMinutes = try c.decodeIfPresent(Int.self, forKey: .lockScreenAwakeMinutes) ?? d.lockScreenAwakeMinutes
+    }
 }
 
 @MainActor

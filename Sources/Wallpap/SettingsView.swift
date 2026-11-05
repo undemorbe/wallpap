@@ -9,6 +9,11 @@ struct SettingsView: View {
             Section {
                 Toggle("Анимировать на рабочем столе", isOn: $store.settings.animateOnDesktop)
                 Toggle("Анимировать на экране блокировки", isOn: $store.settings.animateOnLockScreen)
+                Picker("Не гасить экран блокировки", selection: $store.settings.lockScreenAwakeMinutes) {
+                    ForEach(PlaybackSettings.lockScreenAwakeChoices, id: \.minutes) { Text($0.title).tag($0.minutes) }
+                }
+                .disabled(!store.settings.animateOnLockScreen)
+                .help("macOS гасит экран блокировки через несколько секунд. Пока играет видео, Wallpap может держать его включённым")
             } header: {
                 Text("Анимация")
             } footer: {

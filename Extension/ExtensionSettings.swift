@@ -12,6 +12,8 @@ struct ExtensionSettings: Decodable {
     var pauseInLowPowerMode = true
     var playbackSpeed = 1.0
     var scaling = "fill"
+    /// 0 = system default, -1 = until unlocked, otherwise minutes.
+    var lockScreenAwakeMinutes = 5
 
     init() {}
 
@@ -25,10 +27,12 @@ struct ExtensionSettings: Decodable {
         pauseInLowPowerMode = try c.decodeIfPresent(Bool.self, forKey: .pauseInLowPowerMode) ?? d.pauseInLowPowerMode
         playbackSpeed = min(2, max(0.25, try c.decodeIfPresent(Double.self, forKey: .playbackSpeed) ?? d.playbackSpeed))
         scaling = try c.decodeIfPresent(String.self, forKey: .scaling) ?? d.scaling
+        lockScreenAwakeMinutes = try c.decodeIfPresent(Int.self, forKey: .lockScreenAwakeMinutes) ?? d.lockScreenAwakeMinutes
     }
 
     private enum CodingKeys: String, CodingKey {
-        case animateOnDesktop, animateOnLockScreen, pauseWhenHidden, pauseOnBattery, pauseInLowPowerMode, playbackSpeed, scaling
+        case animateOnDesktop, animateOnLockScreen, pauseWhenHidden, pauseOnBattery, pauseInLowPowerMode, playbackSpeed, scaling,
+             lockScreenAwakeMinutes
     }
 
     var videoGravity: AVLayerVideoGravity { scaling == "fit" ? .resizeAspect : .resizeAspectFill }

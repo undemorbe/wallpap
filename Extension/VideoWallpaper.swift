@@ -97,6 +97,8 @@ final class VideoWallpaper {
             CATransaction.commit()
         }
         let rate = s.shouldAnimate(presentationMode: presentationMode, isActive: isActive) ? s.playbackSpeed : 0
+        DisplayAwake.set(self, playingOnLockScreen: rate > 0 && presentationMode == "locked",
+                         minutes: s.lockScreenAwakeMinutes)
         guard rate != appliedRate else { return }
         appliedRate = rate
         CMTimebaseSetRate(timebase, rate: rate)
@@ -104,6 +106,7 @@ final class VideoWallpaper {
     }
 
     func invalidate() {
+        DisplayAwake.set(self, playingOnLockScreen: false, minutes: 0)
         CMTimebaseSetRate(timebase, rate: 0)
         feeder?.stop()
         root.removeFromSuperlayer()
