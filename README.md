@@ -5,7 +5,7 @@
 <h1 align="center">Wallpap</h1>
 
 <p align="center">
-  Видео- и фото-обои для macOS 26 Tahoe — средствами самой системы.<br>
+  Видео- и фото-обои для macOS 26 Tahoe и macOS 27 — средствами самой системы.<br>
   Без фоновых процессов, без автозапуска, без расхода батареи на «живой» плеер.
 </p>
 
@@ -18,12 +18,12 @@
 <p align="center">
   <a href="https://github.com/undemorbe/wallpap/actions/workflows/ci.yml"><img src="https://github.com/undemorbe/wallpap/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/undemorbe/wallpap/releases/latest"><img src="https://img.shields.io/github/v/release/undemorbe/wallpap?sort=semver" alt="Release"></a>
-  <img src="https://img.shields.io/badge/macOS-26%20Tahoe-black?logo=apple" alt="macOS 26">
+  <img src="https://img.shields.io/badge/macOS-26%20%7C%2027-black?logo=apple" alt="macOS 26 | 27">
   <img src="https://img.shields.io/badge/Apple%20Silicon-arm64-blue" alt="arm64">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT"></a>
 </p>
 
-> **English summary.** Wallpap sets any video or image as your macOS 26 desktop wallpaper using the system's own
+> **English summary.** Wallpap sets any video or image as your macOS 26 / 27 desktop wallpaper using the system's own
 > Aerial player — nothing of ours keeps running in the background. Download `Wallpap.dmg` from
 > [Releases](https://github.com/undemorbe/wallpap/releases/latest), drag it to Applications, and drop a video into the window.
 
@@ -66,7 +66,7 @@
 
 | | |
 |---|---|
-| **ОС** | macOS 26 Tahoe или новее |
+| **ОС** | macOS 26 Tahoe или новее — проверено на macOS 26 и 27 |
 | **Процессор** | Apple Silicon (M1 и новее). Intel-сборки нет |
 | **Обои** | Хотя бы раз откройте «Системные настройки → Обои», чтобы macOS создала хранилище обоев |
 

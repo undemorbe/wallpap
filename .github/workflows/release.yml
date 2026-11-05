@@ -125,7 +125,7 @@ jobs:
           {
             echo "## Wallpap $VERSION"
             echo
-            echo "**Требования:** macOS 26 Tahoe, Mac на Apple Silicon (M1 и новее)."
+            echo "**Требования:** macOS 26 Tahoe или новее (проверено на macOS 26 и 27), Mac на Apple Silicon (M1 и новее)."
             echo
             echo "### Установка"
             echo "1. Скачайте **Wallpap.dmg** ниже, откройте его и перетащите Wallpap в «Программы»."
